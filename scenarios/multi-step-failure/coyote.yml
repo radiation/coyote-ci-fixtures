@@ -1,4 +1,9 @@
 # Expected outcome: step 1 succeeds, step 2 fails, and step 3 is not executed.
+version: 1
+
+pipeline:
+  name: multi-step-failure
+  image: alpine:latest
 
 steps:
   - name: step-1

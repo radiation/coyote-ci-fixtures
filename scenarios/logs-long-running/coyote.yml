@@ -1,4 +1,9 @@
 # Expected outcome: pipeline succeeds after several delayed log lines for streaming verification.
+version: 1
+
+pipeline:
+  name: logs-long-running
+  image: alpine:latest
 
 steps:
   - name: run

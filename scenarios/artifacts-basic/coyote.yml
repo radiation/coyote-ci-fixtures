@@ -1,4 +1,9 @@
 # Expected outcome: pipeline succeeds and produces multiple artifact files under output/.
+version: 1
+
+pipeline:
+  name: artifacts-basic
+  image: alpine:latest
 
 steps:
   - name: run

@@ -1,4 +1,9 @@
 # Expected outcome: pipeline succeeds, logs are printed, and output/hello.txt is produced.
+version: 1
+
+pipeline:
+  name: success-basic
+  image: alpine:latest
 
 steps:
   - name: run

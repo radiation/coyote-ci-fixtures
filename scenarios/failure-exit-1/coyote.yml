@@ -1,4 +1,9 @@
 # Expected outcome: pipeline fails with exit code 1 after printing stdout and stderr.
+version: 1
+
+pipeline:
+  name: failure-exit-1
+  image: alpine:latest
 
 steps:
   - name: run
