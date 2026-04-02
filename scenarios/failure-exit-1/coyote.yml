@@ -1,0 +1,5 @@
+# Expected outcome: pipeline fails with exit code 1 after printing stdout and stderr.
+
+steps:
+  - name: run
+    command: ./scripts/run.sh

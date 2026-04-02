@@ -1,0 +1,10 @@
+# example.coyote.yml
+# This file demonstrates the Coyote CI pipeline format.
+
+steps:
+  - name: example-step
+    command: echo "hello world"
+
+artifacts:
+  paths:
+    - output/**

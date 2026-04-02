@@ -1,0 +1,9 @@
+# Expected outcome: pipeline succeeds and produces multiple artifact files under output/.
+
+steps:
+  - name: run
+    command: ./scripts/run.sh
+
+artifacts:
+  paths:
+    - output/**

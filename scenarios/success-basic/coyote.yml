@@ -1,0 +1,9 @@
+# Expected outcome: pipeline succeeds, logs are printed, and output/hello.txt is produced.
+
+steps:
+  - name: run
+    command: ./scripts/run.sh
+
+artifacts:
+  paths:
+    - output/**

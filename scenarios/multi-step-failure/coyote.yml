@@ -1,0 +1,11 @@
+# Expected outcome: step 1 succeeds, step 2 fails, and step 3 is not executed.
+
+steps:
+  - name: step-1
+    command: ./scripts/step-1.sh
+
+  - name: step-2
+    command: ./scripts/step-2.sh
+
+  - name: step-3
+    command: ./scripts/step-3.sh
