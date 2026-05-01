@@ -170,3 +170,44 @@ artifacts:
   paths:
     - output/**
 ```
+
+## Local Job Bootstrap
+
+Use `scripts/bootstrap_fixture_jobs.py` to recreate one job per fixture scenario after local state resets.
+
+Design:
+
+- discovers every `scenarios/*/coyote.yml`
+- derives one stable job name per scenario from the folder name
+- lists existing jobs through `/api/jobs`
+- creates missing jobs and updates drifted jobs in place
+- skips jobs that already match the desired repo/ref/pipeline-path configuration
+
+Files added for this workflow:
+
+- `scripts/bootstrap_fixture_jobs.py`: bootstrap implementation
+- `.env.example`: local config template
+- `.gitignore`: ignores local `.env`
+
+Why Python:
+
+- the job bootstrap flow needs HTTP, JSON parsing, pagination, payload comparison, and clear error handling
+- Python keeps that logic small with only the standard library and avoids shell quoting problems
+
+Usage:
+
+```bash
+cp .env.example .env
+python3 scripts/bootstrap_fixture_jobs.py --dry-run
+python3 scripts/bootstrap_fixture_jobs.py
+python3 scripts/bootstrap_fixture_jobs.py success-basic parallel-artifacts-fanout
+```
+
+Configuration lives in `.env` or exported environment variables:
+
+- `COYOTE_BASE_URL`: Coyote server base URL such as `http://localhost:8080`
+- `COYOTE_PROJECT_ID`: project id that should own these fixture jobs
+- `COYOTE_FIXTURES_REPO_URL`: git URL for this fixtures repository
+- `COYOTE_FIXTURES_REF`: default git ref, usually `main`
+- `COYOTE_AUTH_TOKEN`: optional bearer token when the target environment requires auth
+- `COYOTE_REQUEST_TIMEOUT`: optional request timeout in seconds
