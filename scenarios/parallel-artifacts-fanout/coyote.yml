@@ -8,32 +8,32 @@ pipeline:
 
 steps:
   - name: prepare
-    command: ./scripts/prepare.sh
+    command: sh ./scripts/prepare.sh
 
   - group:
       name: fanout
       steps:
         - name: backend
-          command: ./scripts/build-backend.sh
+          command: sh ./scripts/build-backend.sh
           artifacts:
             - path: output/backend/backend-linux-amd64.txt
               name: fanout/backend-binary
               type: generic
         - name: frontend
-          command: ./scripts/build-frontend.sh
+          command: sh ./scripts/build-frontend.sh
           artifacts:
             - path: output/frontend/index.html
               name: fanout/frontend-site
               type: generic
         - name: docs
-          command: ./scripts/build-docs.sh
+          command: sh ./scripts/build-docs.sh
           artifacts:
             - path: output/docs/README.md
               name: fanout/docs-readme
               type: generic
 
   - name: summarize
-    command: ./scripts/summarize.sh
+    command: sh ./scripts/summarize.sh
 
 artifacts:
   paths:

@@ -12,7 +12,7 @@ pipeline:
 
 steps:
   - name: publish
-    command: ./scripts/run.sh
+    command: sh ./scripts/run.sh
 
 artifacts:
   - path: releases/service-a/app.jar

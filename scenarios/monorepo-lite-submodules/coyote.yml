@@ -12,32 +12,32 @@ pipeline:
 
 steps:
   - name: prepare
-    command: ./scripts/prepare.sh
+    command: sh ./scripts/prepare.sh
 
   - group:
       name: submodules
       steps:
         - name: api-module
-          command: ./scripts/build-api.sh
+          command: sh ./scripts/build-api.sh
           artifacts:
             - path: output/modules/api/api-service.jar
               name: monorepo-lite/api
               type: generic
         - name: worker-module
-          command: ./scripts/build-worker.sh
+          command: sh ./scripts/build-worker.sh
           artifacts:
             - path: output/modules/worker/worker-container-image.tar
               name: monorepo-lite/worker
               type: docker_image
         - name: sdk-module
-          command: ./scripts/build-sdk.sh
+          command: sh ./scripts/build-sdk.sh
           artifacts:
             - path: output/modules/sdk/sdk-package-0.8.0.tgz
               name: monorepo-lite/sdk
               type: npm_package
 
   - name: manifest
-    command: ./scripts/write-manifest.sh
+    command: sh ./scripts/write-manifest.sh
 
 artifacts:
   paths:

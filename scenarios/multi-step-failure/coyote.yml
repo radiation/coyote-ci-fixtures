@@ -7,10 +7,10 @@ pipeline:
 
 steps:
   - name: step-1
-    command: ./scripts/step-1.sh
+    command: sh ./scripts/step-1.sh
 
   - name: step-2
-    command: ./scripts/step-2.sh
+    command: sh ./scripts/step-2.sh
 
   - name: step-3
-    command: ./scripts/step-3.sh
+    command: sh ./scripts/step-3.sh

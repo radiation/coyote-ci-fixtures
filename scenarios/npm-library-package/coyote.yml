@@ -11,7 +11,7 @@ pipeline:
 
 steps:
   - name: package
-    command: ./scripts/run.sh
+    command: sh ./scripts/run.sh
 
 artifacts:
   - path: dist/index.js

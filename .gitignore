@@ -1,2 +1,10 @@
 .env
 __pycache__/
+
+# Scenario-generated outputs and compiled artifacts.
+scenarios/**/output/
+scenarios/**/dist/
+scenarios/**/artifacts/
+scenarios/**/target/
+scenarios/**/releases/
+scenarios/**/modules/**/target/

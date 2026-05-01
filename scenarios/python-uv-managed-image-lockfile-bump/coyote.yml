@@ -8,7 +8,7 @@ pipeline:
 
 steps:
   - name: snapshot-inputs
-    command: ./scripts/run.sh
+    command: sh ./scripts/run.sh
 
 artifacts:
   - path: artifacts/images/fastapi-managed-image.tar

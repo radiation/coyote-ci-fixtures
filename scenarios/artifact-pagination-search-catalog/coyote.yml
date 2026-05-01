@@ -8,7 +8,7 @@ pipeline:
 
 steps:
   - name: catalog
-    command: ./scripts/run.sh
+    command: sh ./scripts/run.sh
 
 artifacts:
   paths:
