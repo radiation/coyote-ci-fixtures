@@ -1,0 +1,43 @@
+# Expected outcome: one grouped fan-out runs in parallel, each step publishes artifacts,
+# and a final sequential step emits a manifest summarizing the fan-out outputs.
+version: 1
+
+pipeline:
+  name: parallel-artifacts-fanout
+  image: alpine:latest
+
+steps:
+  - name: prepare
+    command: sh ./scripts/prepare.sh
+
+  - group:
+      name: fanout
+      steps:
+        - name: backend
+          command: sh ./scripts/build-backend.sh
+          artifacts:
+            - path: output/backend/backend-linux-amd64.txt
+              name: fanout/backend-binary
+              type: generic
+        - name: frontend
+          command: sh ./scripts/build-frontend.sh
+          artifacts:
+            - path: output/frontend/index.html
+              name: fanout/frontend-site
+              type: generic
+        - name: docs
+          command: sh ./scripts/build-docs.sh
+          artifacts:
+            - path: output/docs/README.md
+              name: fanout/docs-readme
+              type: generic
+
+  - name: summarize
+    command: sh ./scripts/summarize.sh
+
+artifacts:
+  paths:
+    - output/backend/**
+    - output/frontend/**
+    - output/docs/**
+    - output/manifests/**

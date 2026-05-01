@@ -1,0 +1,4 @@
+[project]
+name = "monorepo-worker"
+version = "0.8.0"
+dependencies = ["fastapi==0.115.0"]

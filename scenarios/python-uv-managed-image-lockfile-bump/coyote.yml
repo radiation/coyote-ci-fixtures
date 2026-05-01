@@ -1,0 +1,19 @@
+# Expected outcome: same logical managed-image outputs as the baseline scenario,
+# but dependency inputs change so image refresh logic has an obvious diff to detect.
+version: 1
+
+pipeline:
+  name: python-uv-managed-image-lockfile-bump
+  image: alpine:latest
+
+steps:
+  - name: snapshot-inputs
+    command: sh ./scripts/run.sh
+
+artifacts:
+  - path: artifacts/images/fastapi-managed-image.tar
+    name: managed-image/python-fastapi
+    type: docker_image
+  - path: artifacts/managed-image-inputs.json
+    name: managed-image/python-fastapi-inputs
+    type: generic
