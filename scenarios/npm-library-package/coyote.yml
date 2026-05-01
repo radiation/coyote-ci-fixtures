@@ -1,0 +1,28 @@
+# Expected outcome: a tiny NPM-style library fixture emits browseable dist files and an npm package tarball.
+version: 1
+
+release:
+  strategy: template
+  template: 0.3.{build_number}
+
+pipeline:
+  name: npm-library-package
+  image: alpine:latest
+
+steps:
+  - name: package
+    command: ./scripts/run.sh
+
+artifacts:
+  - path: dist/index.js
+    name: npm/acme-widget-entrypoint
+    type: generic
+  - path: dist/index.d.ts
+    name: npm/acme-widget-types
+    type: generic
+  - path: artifacts/acme-widget-0.3.0.tgz
+    name: npm/acme-widget
+    type: npm_package
+  - path: artifacts/package-manifest.json
+    name: npm/acme-widget-manifest
+    type: generic

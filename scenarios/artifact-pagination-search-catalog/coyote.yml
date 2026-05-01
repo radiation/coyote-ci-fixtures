@@ -1,0 +1,15 @@
+# Expected outcome: pipeline succeeds and produces enough obvious artifacts for pagination,
+# search, and filtering tests in the artifact UI.
+version: 1
+
+pipeline:
+  name: artifact-pagination-search-catalog
+  image: alpine:latest
+
+steps:
+  - name: catalog
+    command: ./scripts/run.sh
+
+artifacts:
+  paths:
+    - output/catalog/**

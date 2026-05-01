@@ -1,0 +1,10 @@
+version = 1
+revision = 1
+
+[[package]]
+name = "fastapi"
+version = "0.115.0"
+
+[[package]]
+name = "uvicorn"
+version = "0.32.0"

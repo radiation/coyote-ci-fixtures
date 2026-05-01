@@ -1,0 +1,22 @@
+# Expected outcome: a tiny Maven-style project produces a small JAR artifact and readable metadata.
+version: 1
+
+release:
+  strategy: template
+  template: 1.0.{build_number}
+
+pipeline:
+  name: maven-jar-basic
+  image: alpine:latest
+
+steps:
+  - name: package
+    command: ./scripts/run.sh
+
+artifacts:
+  - path: target/demo-app-1.0.0.jar
+    name: maven/demo-app
+    type: generic
+  - path: target/demo-app-build.json
+    name: maven/demo-app-build
+    type: generic

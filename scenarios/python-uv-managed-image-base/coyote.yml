@@ -1,0 +1,19 @@
+# Expected outcome: baseline FastAPI-style dependency inputs generate a managed-image artifact placeholder
+# and a readable manifest that makes dependency-driven image refresh testing obvious.
+version: 1
+
+pipeline:
+  name: python-uv-managed-image-base
+  image: alpine:latest
+
+steps:
+  - name: snapshot-inputs
+    command: ./scripts/run.sh
+
+artifacts:
+  - path: artifacts/images/fastapi-managed-image.tar
+    name: managed-image/python-fastapi
+    type: docker_image
+  - path: artifacts/managed-image-inputs.json
+    name: managed-image/python-fastapi-inputs
+    type: generic

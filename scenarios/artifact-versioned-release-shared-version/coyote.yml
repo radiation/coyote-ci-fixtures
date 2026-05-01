@@ -1,0 +1,29 @@
+# Expected outcome: pipeline succeeds, fixed logical artifact paths are reused across builds,
+# and release template versioning makes multiple logical artifacts share one visible version string.
+version: 1
+
+release:
+  strategy: template
+  template: 2.1.{build_number}
+
+pipeline:
+  name: artifact-versioned-release-shared-version
+  image: alpine:latest
+
+steps:
+  - name: publish
+    command: ./scripts/run.sh
+
+artifacts:
+  - path: releases/service-a/app.jar
+    name: catalog/service-a
+    type: generic
+  - path: releases/service-b/app.jar
+    name: catalog/service-b
+    type: generic
+  - path: releases/sdk/bundle.tgz
+    name: catalog/sdk
+    type: npm_package
+  - path: releases/metadata/version-summary.json
+    name: catalog/version-summary
+    type: generic
