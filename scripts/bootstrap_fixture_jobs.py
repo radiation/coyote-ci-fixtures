@@ -9,7 +9,8 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -19,12 +20,18 @@ SCENARIOS_DIR = REPO_ROOT / "scenarios"
 ENV_FILE = REPO_ROOT / ".env"
 DEFAULT_TIMEOUT_SECONDS = 15
 PAGE_LIMIT = 200
+DEFAULT_PROJECT_SLUG = "fixtures"
+DEFAULT_PROJECT_NAME = "Coyote Fixtures"
+DEFAULT_PROJECT_DESCRIPTION = "Fixture scenarios bootstrapped from coyote-ci-fixtures."
 
 
 @dataclass(frozen=True)
 class Config:
     base_url: str
     project_id: str
+    project_slug: str
+    project_name: str
+    project_description: str
     fixtures_repo_url: str
     fixtures_ref: str
     auth_token: str | None
@@ -45,8 +52,8 @@ class ScenarioSpec:
     job_name: str
 
     def create_payload(self, config: Config) -> dict[str, Any]:
-        return {
-            "project_id": config.project_id,
+        payload = {
+            "project_slug": config.project_slug,
             "name": self.job_name,
             "repository_url": config.fixtures_repo_url,
             "default_ref": config.fixtures_ref,
@@ -54,6 +61,9 @@ class ScenarioSpec:
             "push_enabled": False,
             "enabled": True,
         }
+        if config.project_id:
+            payload["project_id"] = config.project_id
+        return payload
 
     def update_payload(self, config: Config) -> dict[str, Any]:
         return {
@@ -95,6 +105,18 @@ class CoyoteClient:
             if len(page) < PAGE_LIMIT:
                 return jobs
             offset += PAGE_LIMIT
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        response = self._request_json("GET", "/projects")
+        projects = response.get("data", {}).get("projects", [])
+        if not isinstance(projects, list):
+            raise ApiError("unexpected projects list response shape")
+        return projects
+
+    def create_project(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.dry_run:
+            return {"data": payload}
+        return self._request_json("POST", "/projects", payload)
 
     def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.dry_run:
@@ -155,11 +177,27 @@ def load_dotenv(path: Path) -> None:
         os.environ.setdefault(key, value)
 
 
+def is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
+
+
 def read_config() -> Config:
     load_dotenv(ENV_FILE)
 
     base_url = os.getenv("COYOTE_BASE_URL", "").strip()
     project_id = os.getenv("COYOTE_PROJECT_ID", "").strip()
+    project_slug = os.getenv("COYOTE_PROJECT_SLUG", "").strip()
+    if not project_slug and project_id and not is_uuid(project_id):
+        project_slug = project_id
+        project_id = ""
+    if not project_slug and not project_id:
+        project_slug = DEFAULT_PROJECT_SLUG
+    project_name = os.getenv("COYOTE_PROJECT_NAME", DEFAULT_PROJECT_NAME).strip() or DEFAULT_PROJECT_NAME
+    project_description = os.getenv("COYOTE_PROJECT_DESCRIPTION", DEFAULT_PROJECT_DESCRIPTION).strip()
     fixtures_repo_url = os.getenv("COYOTE_FIXTURES_REPO_URL", "").strip()
     fixtures_ref = os.getenv("COYOTE_FIXTURES_REF", "").strip()
     auth_token = os.getenv("COYOTE_AUTH_TOKEN", "").strip() or None
@@ -167,8 +205,6 @@ def read_config() -> Config:
     missing: list[str] = []
     if not base_url:
         missing.append("COYOTE_BASE_URL")
-    if not project_id:
-        missing.append("COYOTE_PROJECT_ID")
     if not fixtures_repo_url:
         missing.append("COYOTE_FIXTURES_REPO_URL")
     if not fixtures_ref:
@@ -187,11 +223,50 @@ def read_config() -> Config:
     return Config(
         base_url=base_url,
         project_id=project_id,
+        project_slug=project_slug,
+        project_name=project_name,
+        project_description=project_description,
         fixtures_repo_url=fixtures_repo_url,
         fixtures_ref=fixtures_ref,
         auth_token=auth_token,
         timeout_seconds=timeout_seconds,
     )
+
+
+def ensure_project(client: CoyoteClient, config: Config) -> str:
+    projects = client.list_projects()
+
+    if config.project_id:
+        for project in projects:
+            if str(project.get("id", "")).strip() == config.project_id:
+                print(f"Using existing project {config.project_id}.")
+                return config.project_id
+        raise ApiError(f"configured project id {config.project_id!r} was not found")
+
+    for project in projects:
+        if str(project.get("slug", "")).strip() != config.project_slug:
+            continue
+        project_id = str(project.get("id", "")).strip()
+        if not project_id:
+            raise ApiError(f"project {config.project_slug!r} is missing an id")
+        print(f"Using existing project {config.project_slug} ({project_id}).")
+        return project_id
+
+    print(f"[create] project {config.project_name} ({config.project_slug})")
+    created = client.create_project(
+        {
+            "name": config.project_name,
+            "slug": config.project_slug,
+            "description": config.project_description,
+        }
+    )
+    data = created.get("data", {})
+    project_id = str(data.get("id", "")).strip()
+    if client.dry_run:
+        return project_id
+    if not project_id:
+        raise ApiError(f"created project {config.project_slug!r} is missing an id")
+    return project_id
 
 
 def discover_scenarios(selected_names: list[str]) -> list[ScenarioSpec]:
@@ -332,6 +407,10 @@ def main(argv: list[str]) -> int:
     if not specs:
         raise ApiError("no scenarios matched the current selection")
     client = CoyoteClient(config=config, dry_run=args.dry_run)
+    project_id = ensure_project(client, config)
+    if project_id:
+        config = replace(config, project_id=project_id)
+        client = CoyoteClient(config=config, dry_run=args.dry_run)
     return sync_jobs(client, config, specs)
 
 

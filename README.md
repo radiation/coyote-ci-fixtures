@@ -178,6 +178,7 @@ Use `scripts/bootstrap_fixture_jobs.py` to recreate one job per fixture scenario
 Design:
 
 - discovers every `scenarios/*/coyote.yml`
+- ensures a fixtures project exists before syncing jobs
 - derives one stable job name per scenario from the folder name
 - lists existing jobs through `/api/jobs`
 - creates missing jobs and updates drifted jobs in place
@@ -206,8 +207,13 @@ python3 scripts/bootstrap_fixture_jobs.py success-basic parallel-artifacts-fanou
 Configuration lives in `.env` or exported environment variables:
 
 - `COYOTE_BASE_URL`: Coyote server base URL such as `http://localhost:8080`
-- `COYOTE_PROJECT_ID`: project id that should own these fixture jobs
+- `COYOTE_PROJECT_ID`: optional existing project UUID; when unset or non-UUID, the script resolves by slug instead
+- `COYOTE_PROJECT_SLUG`: optional project slug to find or create; defaults to `fixtures`
+- `COYOTE_PROJECT_NAME`: optional project name used when the script creates the fixtures project; defaults to `Coyote Fixtures`
+- `COYOTE_PROJECT_DESCRIPTION`: optional project description used on project creation
 - `COYOTE_FIXTURES_REPO_URL`: git URL for this fixtures repository
 - `COYOTE_FIXTURES_REF`: default git ref, usually `main`
 - `COYOTE_AUTH_TOKEN`: optional bearer token when the target environment requires auth
 - `COYOTE_REQUEST_TIMEOUT`: optional request timeout in seconds
+
+The default local flow is to reuse or create a `fixtures` project slug named `Coyote Fixtures` and place every fixture job there.
