@@ -7,7 +7,6 @@ import json
 import os
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass, replace
@@ -34,7 +33,8 @@ class Config:
     project_description: str
     fixtures_repo_url: str
     fixtures_ref: str
-    auth_token: str | None
+    bootstrap_users: tuple["UserSpec", ...]
+    api_token: str | None
     timeout_seconds: int
 
     @property
@@ -43,6 +43,23 @@ class Config:
         if trimmed.endswith("/api"):
             return trimmed
         return trimmed + "/api"
+
+
+@dataclass(frozen=True)
+class UserSpec:
+    email: str
+    display_name: str | None = None
+    global_role: str | None = None
+
+    def create_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "email": self.email,
+        }
+        if self.display_name:
+            payload["display_name"] = self.display_name
+        if self.global_role:
+            payload["global_role"] = self.global_role
+        return payload
 
 
 @dataclass(frozen=True)
@@ -113,10 +130,22 @@ class CoyoteClient:
             raise ApiError("unexpected projects list response shape")
         return projects
 
+    def list_users(self) -> list[dict[str, Any]]:
+        response = self._request_json("GET", "/users")
+        users = response.get("data", {}).get("users", [])
+        if not isinstance(users, list):
+            raise ApiError("unexpected users list response shape")
+        return users
+
     def create_project(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.dry_run:
             return {"data": payload}
         return self._request_json("POST", "/projects", payload)
+
+    def create_user(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.dry_run:
+            return {"data": payload}
+        return self._request_json("POST", "/users", payload)
 
     def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.dry_run:
@@ -136,8 +165,8 @@ class CoyoteClient:
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
-        if self.config.auth_token:
-            headers["Authorization"] = f"Bearer {self.config.auth_token}"
+        if self.config.api_token:
+            headers["Authorization"] = f"Bearer {self.config.api_token}"
 
         request = urllib.request.Request(
             self.config.api_base + path,
@@ -200,7 +229,8 @@ def read_config() -> Config:
     project_description = os.getenv("COYOTE_PROJECT_DESCRIPTION", DEFAULT_PROJECT_DESCRIPTION).strip()
     fixtures_repo_url = os.getenv("COYOTE_FIXTURES_REPO_URL", "").strip()
     fixtures_ref = os.getenv("COYOTE_FIXTURES_REF", "").strip()
-    auth_token = os.getenv("COYOTE_AUTH_TOKEN", "").strip() or None
+    bootstrap_users = parse_bootstrap_users(os.getenv("COYOTE_BOOTSTRAP_USERS", ""))
+    api_token = os.getenv("COYOTE_API_TOKEN", "").strip() or None
 
     missing: list[str] = []
     if not base_url:
@@ -228,9 +258,63 @@ def read_config() -> Config:
         project_description=project_description,
         fixtures_repo_url=fixtures_repo_url,
         fixtures_ref=fixtures_ref,
-        auth_token=auth_token,
+        bootstrap_users=bootstrap_users,
+        api_token=api_token,
         timeout_seconds=timeout_seconds,
     )
+
+
+def parse_bootstrap_users(raw_value: str) -> tuple[UserSpec, ...]:
+    text = raw_value.strip()
+    if not text:
+        return ()
+
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ApiError("COYOTE_BOOTSTRAP_USERS must be valid JSON") from exc
+
+    if not isinstance(decoded, list):
+        raise ApiError("COYOTE_BOOTSTRAP_USERS must be a JSON array")
+
+    users: list[UserSpec] = []
+    seen_emails: set[str] = set()
+    for index, item in enumerate(decoded):
+        if isinstance(item, str):
+            email = item.strip().lower()
+            display_name = None
+            global_role = None
+        elif isinstance(item, dict):
+            email = str(item.get("email", "")).strip().lower()
+            display_name = normalize_optional_text(item.get("display_name"))
+            global_role = normalize_optional_role(item.get("global_role"), index)
+        else:
+            raise ApiError(f"COYOTE_BOOTSTRAP_USERS[{index}] must be a string or object")
+
+        if not email:
+            raise ApiError(f"COYOTE_BOOTSTRAP_USERS[{index}] is missing an email")
+        if email in seen_emails:
+            raise ApiError(f"COYOTE_BOOTSTRAP_USERS contains duplicate email {email!r}")
+        seen_emails.add(email)
+        users.append(UserSpec(email=email, display_name=display_name, global_role=global_role))
+
+    return tuple(users)
+
+
+def normalize_optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def normalize_optional_role(value: Any, index: int) -> str | None:
+    role = normalize_optional_text(value)
+    if role is None:
+        return None
+    if role not in {"admin", "user"}:
+        raise ApiError(f"COYOTE_BOOTSTRAP_USERS[{index}].global_role must be 'admin' or 'user'")
+    return role
 
 
 def ensure_project(client: CoyoteClient, config: Config) -> str:
@@ -267,6 +351,33 @@ def ensure_project(client: CoyoteClient, config: Config) -> str:
     if not project_id:
         raise ApiError(f"created project {config.project_slug!r} is missing an id")
     return project_id
+
+
+def ensure_users(client: CoyoteClient, config: Config) -> None:
+    if not config.bootstrap_users:
+        return
+
+    users = client.list_users()
+    users_by_email = {
+        str(user.get("email", "")).strip().lower(): user
+        for user in users
+        if str(user.get("email", "")).strip()
+    }
+
+    created = 0
+    skipped = 0
+    for spec in config.bootstrap_users:
+        if spec.email in users_by_email:
+            print(f"[skip]   user {spec.email} already exists")
+            skipped += 1
+            continue
+
+        payload = spec.create_payload()
+        print(f"[create] user {spec.email}")
+        client.create_user(payload)
+        created += 1
+
+    print(f"User summary: created={created} skipped={skipped}")
 
 
 def discover_scenarios(selected_names: list[str]) -> list[ScenarioSpec]:
@@ -411,6 +522,7 @@ def main(argv: list[str]) -> int:
     if project_id:
         config = replace(config, project_id=project_id)
         client = CoyoteClient(config=config, dry_run=args.dry_run)
+    ensure_users(client, config)
     return sync_jobs(client, config, specs)
 
 
@@ -418,7 +530,13 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main(sys.argv[1:]))
     except ApiError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        message = str(exc)
+        if "HTTP 401" in message:
+            message += (
+                "\n\nHint: this server requires authentication. Create an API token in Coyote "
+                "and set COYOTE_API_TOKEN to send Authorization: Bearer <token>."
+            )
+        print(f"error: {message}", file=sys.stderr)
         raise SystemExit(1)
     except KeyboardInterrupt:
         print("error: interrupted", file=sys.stderr)

@@ -179,6 +179,7 @@ Design:
 
 - discovers every `scenarios/*/coyote.yml`
 - ensures a fixtures project exists before syncing jobs
+- optionally creates configured users before syncing jobs
 - derives one stable job name per scenario from the folder name
 - lists existing jobs through `/api/jobs`
 - creates missing jobs and updates drifted jobs in place
@@ -213,7 +214,37 @@ Configuration lives in `.env` or exported environment variables:
 - `COYOTE_PROJECT_DESCRIPTION`: optional project description used on project creation
 - `COYOTE_FIXTURES_REPO_URL`: git URL for this fixtures repository
 - `COYOTE_FIXTURES_REF`: default git ref, usually `main`
-- `COYOTE_AUTH_TOKEN`: optional bearer token when the target environment requires auth
+- `COYOTE_BOOTSTRAP_USERS`: optional JSON array of users to create before syncing jobs; supports either email strings or objects with `email`, optional `display_name`, and optional `global_role`
+- `COYOTE_API_TOKEN`: optional Coyote API token sent as `Authorization: Bearer <token>`
 - `COYOTE_REQUEST_TIMEOUT`: optional request timeout in seconds
 
 The default local flow is to reuse or create a `fixtures` project slug named `Coyote Fixtures` and place every fixture job there.
+
+When Coyote runs with `AUTH_MODE=oidc` or `AUTH_MODE=header`, programmatic fixture access should use a first-class Coyote API token. Create a token for a user with the required project permissions, then export it before running the script:
+
+```bash
+export COYOTE_API_TOKEN=coyote_pat_...
+python3 scripts/bootstrap_fixture_jobs.py --dry-run
+```
+
+The token inherits the owning user's global and project RBAC permissions. For the default bootstrap flow, use a token owned by a user that can list/create projects and jobs, and can create users if `COYOTE_BOOTSTRAP_USERS` is set. The raw token is shown only once when it is created, so keep it in your local environment or secret manager.
+
+Typical OIDC flow:
+
+1. Log in to Coyote in the browser as the user that should own the token.
+2. Create a token with `POST /api/me/tokens` from the logged-in browser session, for example through the Swagger UI at `http://localhost:8080/swagger/`.
+3. Copy the returned `data.token` value immediately; it is only returned once.
+4. Export it as `COYOTE_API_TOKEN` before running `scripts/bootstrap_fixture_jobs.py`.
+
+Do not export, parse, or scrape browser cookies for this script. `--dry-run` still reads current projects and jobs from the Coyote API, so it also needs `COYOTE_API_TOKEN` when auth is enabled.
+
+Example user bootstrap configuration:
+
+```bash
+export COYOTE_BOOTSTRAP_USERS='[
+  "viewer@example.com",
+  {"email": "admin@example.com", "display_name": "Fixture Admin", "global_role": "admin"}
+]'
+```
+
+The bootstrap script only creates missing users. It does not update or delete existing users.
