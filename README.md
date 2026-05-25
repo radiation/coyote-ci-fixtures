@@ -42,6 +42,7 @@ Each scenario should keep the same lightweight pattern:
 - `success-basic`: minimal success smoke test
 - `failure-exit-1`: minimal failure smoke test
 - `logs-long-running`: streaming log smoke test
+  Note: this scenario now runs for about 60 seconds total, which makes it suitable for both log streaming smoke checks and manual Workers-page busy visibility checks.
 - `multi-step-failure`: sequential failure barrier smoke test
 
 ### Keep, but treat as legacy-smoke coverage

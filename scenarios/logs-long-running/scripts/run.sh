@@ -4,9 +4,9 @@ set -eu
 
 echo "starting long-running logs"
 i=1
-while [ "$i" -le 4 ]; do
+while [ "$i" -le 6 ]; do
   echo "tick $i"
-  sleep 2
+  sleep 10
   i=$((i + 1))
 done
 echo "finished long-running logs"
