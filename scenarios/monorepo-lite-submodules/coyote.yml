@@ -2,10 +2,6 @@
 # without requiring a top-level multi-job orchestration design.
 version: 1
 
-release:
-  strategy: template
-  template: 0.8.{build_number}
-
 pipeline:
   name: monorepo-lite-submodules
   image: alpine:latest
@@ -40,8 +36,19 @@ steps:
     command: sh ./scripts/write-manifest.sh
 
 artifacts:
-  paths:
-    - output/modules/api/**
-    - output/modules/worker/**
-    - output/modules/sdk/**
-    - output/manifest/**
+  - path: output/modules/api/**
+    version:
+      template: 0.8.{build_number}
+      channel: latest
+  - path: output/modules/worker/**
+    version:
+      template: 0.8.{build_number}
+      channel: latest
+  - path: output/modules/sdk/**
+    version:
+      template: 0.8.{build_number}
+      channel: latest
+  - path: output/manifest/**
+    version:
+      template: 0.8.{build_number}
+      channel: latest

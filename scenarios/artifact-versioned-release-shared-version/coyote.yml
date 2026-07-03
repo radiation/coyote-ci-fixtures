@@ -1,10 +1,6 @@
 # Expected outcome: pipeline succeeds, fixed logical artifact paths are reused across builds,
-# and release template versioning makes multiple logical artifacts share one visible version string.
+# and artifact version templates make multiple logical artifacts share one visible version string.
 version: 1
-
-release:
-  strategy: template
-  template: 2.1.{build_number}
 
 pipeline:
   name: artifact-versioned-release-shared-version
@@ -18,12 +14,24 @@ artifacts:
   - path: releases/service-a/app.jar
     name: catalog/service-a
     type: generic
+    version:
+      template: 2.1.{build_number}
+      channel: latest
   - path: releases/service-b/app.jar
     name: catalog/service-b
     type: generic
+    version:
+      template: 2.1.{build_number}
+      channel: latest
   - path: releases/sdk/bundle.tgz
     name: catalog/sdk
     type: npm_package
+    version:
+      template: 2.1.{build_number}
+      channel: latest
   - path: releases/metadata/version-summary.json
     name: catalog/version-summary
     type: generic
+    version:
+      template: 2.1.{build_number}
+      channel: latest

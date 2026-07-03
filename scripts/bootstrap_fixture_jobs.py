@@ -66,6 +66,7 @@ class UserSpec:
 class ScenarioSpec:
     scenario_name: str
     pipeline_path: str
+    pipeline_yaml: str
     job_name: str
 
     def create_payload(self, config: Config) -> dict[str, Any]:
@@ -74,6 +75,7 @@ class ScenarioSpec:
             "name": self.job_name,
             "repository_url": config.fixtures_repo_url,
             "default_ref": config.fixtures_ref,
+            "pipeline_yaml": self.pipeline_yaml,
             "pipeline_path": self.pipeline_path,
             "push_enabled": False,
             "enabled": True,
@@ -92,7 +94,7 @@ class ScenarioSpec:
             "push_branch": "",
             "branch_allowlist": [],
             "tag_allowlist": [],
-            "pipeline_yaml": "",
+            "pipeline_yaml": self.pipeline_yaml,
             "pipeline_path": self.pipeline_path,
             "enabled": True,
         }
@@ -392,6 +394,7 @@ def discover_scenarios(selected_names: list[str]) -> list[ScenarioSpec]:
             ScenarioSpec(
                 scenario_name=scenario_name,
                 pipeline_path=pipeline_file.relative_to(REPO_ROOT).as_posix(),
+                pipeline_yaml=pipeline_file.read_text(encoding="utf-8"),
                 job_name=scenario_name,
             )
         )
