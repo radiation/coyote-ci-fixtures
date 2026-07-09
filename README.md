@@ -199,8 +199,8 @@ steps:
 ### `npm-artifact-download-consumer`
 
 - This is a standalone downstream scenario with a bootstrapped job-level `artifact_triggers` entry pointing at `npm-install-cache-smoke`.
-- The consumer script can still accept an explicit `COYOTE_ARTIFACT_URL`, but its default path is to derive the artifact download URL from the injected trigger environment:
-  `COYOTE_TRIGGER_BUILD_ID`, `COYOTE_TRIGGER_ARTIFACT_ID`, and related provenance fields.
+- The consumer script now prefers the worker-materialized local handoff path from `COYOTE_TRIGGER_ARTIFACT_LOCAL_PATH`.
+- If local handoff is unavailable, it can still accept an explicit `COYOTE_ARTIFACT_URL`, or derive the artifact download URL from `COYOTE_TRIGGER_BUILD_ID`, `COYOTE_TRIGGER_ARTIFACT_ID`, and related provenance fields.
 - It is intended to run as an artifact-triggered consumer. A direct manual run without trigger metadata will fail fast.
 
 ### `python-uv-managed-image-base` and `python-uv-managed-image-lockfile-bump`
