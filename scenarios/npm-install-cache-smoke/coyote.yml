@@ -1,0 +1,28 @@
+# Expected outcome: npm resolves a public package, node cache restore/save logs are visible,
+# and the packed artifact can be downloaded through the CLI.
+version: 1
+
+pipeline:
+  name: npm-install-cache-smoke
+
+steps:
+  - name: install-and-pack
+    image: node:22-alpine
+    command: sh ./scripts/run.sh
+    cache:
+      preset: node
+      policy: pull-push
+
+artifacts:
+  - path: dist/index.js
+    name: npm/acme-widget-network-entrypoint
+    type: generic
+  - path: dist/index.d.ts
+    name: npm/acme-widget-network-types
+    type: generic
+  - path: artifacts/install-report.json
+    name: npm/acme-widget-network-report
+    type: generic
+  - path: artifacts/acme-widget-network-smoke-0.4.0.tgz
+    name: npm/acme-widget-network
+    type: npm_package

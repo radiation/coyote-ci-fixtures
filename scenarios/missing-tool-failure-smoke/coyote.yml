@@ -1,0 +1,10 @@
+# Expected outcome: the build fails clearly because the selected image does not contain Maven.
+version: 1
+
+pipeline:
+  name: missing-tool-failure-smoke
+  image: alpine:3.20
+
+steps:
+  - name: missing-maven
+    command: sh ./scripts/run.sh

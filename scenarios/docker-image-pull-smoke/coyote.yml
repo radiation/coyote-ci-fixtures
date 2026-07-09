@@ -1,0 +1,16 @@
+# Expected outcome: a worker can pull a public container image, run a simple command,
+# and upload a small artifact without opening the web UI.
+version: 1
+
+pipeline:
+  name: docker-image-pull-smoke
+  image: busybox:1.36.1
+
+steps:
+  - name: verify-pull
+    command: sh ./scripts/run.sh
+
+artifacts:
+  - path: output/pull-report.txt
+    name: docker/pull-report
+    type: generic

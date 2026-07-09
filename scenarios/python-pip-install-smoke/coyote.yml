@@ -1,0 +1,16 @@
+# Expected outcome: Python can reach PyPI, install small dependencies, and upload
+# a report artifact that records the resolved versions.
+version: 1
+
+pipeline:
+  name: python-pip-install-smoke
+  image: python:3.12-slim
+
+steps:
+  - name: install-and-report
+    command: sh ./scripts/run.sh
+
+artifacts:
+  - path: artifacts/dependency-report.json
+    name: python/dependency-report
+    type: generic

@@ -1,0 +1,15 @@
+{
+  "name": "acme-widget-network-smoke",
+  "version": "0.4.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ./scripts/build.mjs"
+  },
+  "dependencies": {
+    "lodash-es": "4.17.21"
+  }
+}

@@ -1,0 +1,22 @@
+# Expected outcome: Maven resolves a public dependency, packages a tiny JAR,
+# and uploads the JAR plus readable dependency metadata.
+version: 1
+
+pipeline:
+  name: maven-dependency-smoke
+  image: maven:3.9-eclipse-temurin-25
+
+steps:
+  - name: package
+    command: sh ./scripts/run.sh
+
+artifacts:
+  - path: target/dependency-smoke-1.0.0.jar
+    name: maven/dependency-smoke
+    type: generic
+  - path: target/dependency-tree.txt
+    name: maven/dependency-tree
+    type: generic
+  - path: target/build-report.json
+    name: maven/build-report
+    type: generic

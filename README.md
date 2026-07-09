@@ -35,6 +35,26 @@ Each scenario should keep the same lightweight pattern:
 - small fixture source files only when they improve test value
 - generated outputs written under `output/`, `dist/`, `target/`, or `artifacts/`
 
+## Real-Network Smoke Scenarios
+
+These scenarios are opt-in. They are intended for local smoke validation of real worker behavior when a build needs:
+
+- public container image pulls
+- package-manager network access
+- language runtime/toolchain availability
+- cache restore/save visibility in logs
+- artifact upload after real dependency work
+
+They are not part of the default tiny fixture set, and normal unit tests should not depend on them.
+
+Current opt-in scenarios:
+
+- `docker-image-pull-smoke`: pull a public image and upload a simple artifact
+- `maven-dependency-smoke`: resolve a Maven Central dependency and package a tiny JAR
+- `npm-install-cache-smoke`: resolve an npm dependency, exercise the `node` cache preset, and pack a tarball
+- `python-pip-install-smoke`: resolve PyPI dependencies and upload a version report
+- `missing-tool-failure-smoke`: intentionally fail on an image that does not contain Maven so logs/status can be inspected
+
 ## Recommended Scenario Set
 
 ### Keep as-is
@@ -63,6 +83,59 @@ Each scenario should keep the same lightweight pattern:
 | `python-uv-managed-image-lockfile-bump` | Same logical fixture as baseline, but with dependency/lockfile changes intended to trigger managed-image refresh behavior | Sequential | same output paths as baseline with changed metadata | `pyproject.toml`, `uv.lock`, `Dockerfile` |
 
 ## Scenario Notes
+
+### Real-network smoke scenarios
+
+These scenarios are intentionally separate from the legacy placeholder-style fixtures above.
+
+- The placeholder fixtures remain useful for browse/version/manual UI coverage without depending on Docker Hub, Maven Central, npm, or PyPI.
+- The real-network smoke fixtures are the worker-validation slice for CLI-first troubleshooting and agent workflows.
+
+Queueing helpers:
+
+- `scripts/run-fixtures.sh all` queues only the small default scenarios.
+- `scripts/run-fixtures.sh real-network` queues the successful real-network smoke set.
+- `scripts/run-fixtures.sh manual-failure` queues the intentional failure fixture.
+
+CLI-first smoke loop after running `scripts/bootstrap_fixture_jobs.py`:
+
+```bash
+coyote job run npm-install-cache-smoke --project fixtures --ref main --yes
+coyote build watch <build-id>
+coyote build logs <build-id>
+coyote build artifacts <build-id>
+coyote build artifacts download <build-id> --all --output ./artifacts/npm-install-cache-smoke
+```
+
+Agent-friendly JSON variant:
+
+```bash
+BUILD_ID=$(coyote job run npm-install-cache-smoke --project fixtures --ref main --yes --json | jq -r '.run.build_id')
+coyote build watch "$BUILD_ID" --json
+coyote build logs "$BUILD_ID" --json
+coyote build artifacts "$BUILD_ID" --json
+coyote build artifacts download "$BUILD_ID" --all --output ./artifacts/npm-install-cache-smoke --json
+```
+
+Recommended local prerequisites before running the real-network scenarios:
+
+- the worker is running with the Docker execution backend
+- outbound network access is available from worker step containers
+- the host Docker daemon can pull public images
+- you are comfortable with the local-dev Docker socket trust model documented in the main repo
+
+For the cache smoke specifically, run the same job twice and inspect `coyote build logs <build-id>` for lines such as:
+
+- `cache lookup: ... hit=false`
+- `cache lookup: ... hit=true`
+- `cache restore end: ...`
+- `cache save end: ...`
+
+For the intentional failure smoke, use `missing-tool-failure-smoke` and confirm that:
+
+- the build reaches `failed`
+- the failing step remains distinguishable from timeout/cancel paths
+- the logs preserve the shell error showing the missing executable
 
 ### `artifact-versioned-release-shared-version`
 
