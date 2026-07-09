@@ -1,0 +1,9 @@
+{
+  "name": "npm-artifact-download-consumer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "acme-widget-network-smoke": "file:downloads/acme-widget-network-smoke-0.4.0.tgz"
+  }
+}

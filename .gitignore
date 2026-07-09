@@ -8,3 +8,6 @@ scenarios/**/artifacts/
 scenarios/**/target/
 scenarios/**/releases/
 scenarios/**/modules/**/target/
+scenarios/**/downloads/
+scenarios/**/node_modules/
+

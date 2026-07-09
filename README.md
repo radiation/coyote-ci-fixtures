@@ -96,6 +96,7 @@ Queueing helpers:
 - `scripts/run-fixtures.sh all` queues only the small default scenarios.
 - `scripts/run-fixtures.sh real-network` queues the successful real-network smoke set.
 - `scripts/run-fixtures.sh manual-failure` queues the intentional failure fixture.
+- `scripts/run-fixtures.sh artifact-download-chain` queues a real npm package producer, waits for success, then queues an inline consumer build that downloads that artifact back from Coyote.
 
 CLI-first smoke loop after running `scripts/bootstrap_fixture_jobs.py`:
 
@@ -123,6 +124,8 @@ Recommended local prerequisites before running the real-network scenarios:
 - outbound network access is available from worker step containers
 - the host Docker daemon can pull public images
 - you are comfortable with the local-dev Docker socket trust model documented in the main repo
+
+For `artifact-download-chain`, the consumer step container also needs a Coyote API URL that is reachable from inside Docker. The helper defaults `STEP_API_URL` to `http://host.docker.internal:8080`; override it when your local server is reachable at a different address from step containers.
 
 For the cache smoke specifically, run the same job twice and inspect `coyote build logs <build-id>` for lines such as:
 
@@ -184,6 +187,12 @@ steps:
 
 - Includes `package.json`, `package-lock.json`, and a tiny `src/index.js`.
 - Produces both easy-to-browse `dist/` files and an `npm_package` tarball artifact.
+
+### `npm-artifact-download-consumer`
+
+- This is an orchestration-only consumer fixture used by `scripts/run-fixtures.sh artifact-download-chain`.
+- The helper first runs `npm-install-cache-smoke` to publish a real `.tgz`, then queues an inline pipeline that checks out this repo, downloads that artifact from Coyote, installs it with `npm`, and writes a small verification report.
+- The scenario folder intentionally does not include a standalone `coyote.yml` because the artifact URL is injected dynamically per producer build.
 
 ### `python-uv-managed-image-base` and `python-uv-managed-image-lockfile-bump`
 
