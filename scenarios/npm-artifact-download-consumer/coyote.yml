@@ -1,0 +1,23 @@
+# Expected outcome: when triggered by npm-install-cache-smoke artifact upload,
+# this consumer downloads the producer tarball back from Coyote, installs it,
+# and writes a verification report with trigger provenance.
+version: 1
+
+pipeline:
+  name: npm-artifact-download-consumer
+
+env:
+  COYOTE_API_URL: http://host.docker.internal:8080
+
+steps:
+  - name: consume-downloaded-package
+    image: node:22-alpine
+    command: sh ./scripts/run.sh
+
+artifacts:
+  - path: downloads/acme-widget-network-smoke-0.4.0.tgz
+    name: npm/acme-widget-network-downloaded-input
+    type: npm_package
+  - path: artifacts/consumer-report.json
+    name: npm/acme-widget-network-consumer-report
+    type: generic

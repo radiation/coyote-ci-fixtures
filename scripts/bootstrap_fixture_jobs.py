@@ -63,13 +63,59 @@ class UserSpec:
 
 
 @dataclass(frozen=True)
+class ArtifactTriggerSpec:
+    producer_job_name: str
+    path: str
+
+
+@dataclass(frozen=True)
 class ScenarioSpec:
     scenario_name: str
     pipeline_path: str
     pipeline_yaml: str
     job_name: str
+    artifact_triggers: tuple[ArtifactTriggerSpec, ...] = ()
 
-    def create_payload(self, config: Config) -> dict[str, Any]:
+    def unresolved_artifact_triggers(self, jobs_by_name: dict[str, list[dict[str, Any]]]) -> tuple[str, ...]:
+        missing: list[str] = []
+        for trigger in self.artifact_triggers:
+            matches = jobs_by_name.get(trigger.producer_job_name, [])
+            if not matches:
+                missing.append(trigger.producer_job_name)
+                continue
+            if len(matches) > 1:
+                raise ApiError(
+                    f"artifact trigger dependency {trigger.producer_job_name!r} is ambiguous within project"
+                )
+            producer_id = str(matches[0].get("id", "")).strip()
+            if not producer_id:
+                raise ApiError(
+                    f"artifact trigger dependency {trigger.producer_job_name!r} is missing a job id"
+                )
+        return tuple(missing)
+
+    def resolved_artifact_triggers(self, jobs_by_name: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        resolved: list[dict[str, Any]] = []
+        for trigger in self.artifact_triggers:
+            matches = jobs_by_name.get(trigger.producer_job_name, [])
+            if len(matches) != 1:
+                raise ApiError(
+                    f"artifact trigger dependency {trigger.producer_job_name!r} must resolve to exactly one job"
+                )
+            producer_id = str(matches[0].get("id", "")).strip()
+            if not producer_id:
+                raise ApiError(
+                    f"artifact trigger dependency {trigger.producer_job_name!r} is missing a job id"
+                )
+            resolved.append(
+                {
+                    "producer_job_id": producer_id,
+                    "path": trigger.path,
+                }
+            )
+        return resolved
+
+    def create_payload(self, config: Config, jobs_by_name: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         payload = {
             "project_slug": config.project_slug,
             "name": self.job_name,
@@ -82,10 +128,13 @@ class ScenarioSpec:
         }
         if config.project_id:
             payload["project_id"] = config.project_id
+        artifact_triggers = self.resolved_artifact_triggers(jobs_by_name)
+        if artifact_triggers:
+            payload["artifact_triggers"] = artifact_triggers
         return payload
 
-    def update_payload(self, config: Config) -> dict[str, Any]:
-        return {
+    def update_payload(self, config: Config, jobs_by_name: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+        payload = {
             "name": self.job_name,
             "repository_url": config.fixtures_repo_url,
             "default_ref": config.fixtures_ref,
@@ -98,6 +147,8 @@ class ScenarioSpec:
             "pipeline_path": self.pipeline_path,
             "enabled": True,
         }
+        payload["artifact_triggers"] = self.resolved_artifact_triggers(jobs_by_name)
+        return payload
 
 
 class ApiError(RuntimeError):
@@ -396,6 +447,14 @@ def discover_scenarios(selected_names: list[str]) -> list[ScenarioSpec]:
                 pipeline_path=pipeline_file.relative_to(REPO_ROOT).as_posix(),
                 pipeline_yaml=pipeline_file.read_text(encoding="utf-8"),
                 job_name=scenario_name,
+                artifact_triggers=(
+                    ArtifactTriggerSpec(
+                        producer_job_name="npm-install-cache-smoke",
+                        path="artifacts/acme-widget-network-smoke-0.4.0.tgz",
+                    ),
+                )
+                if scenario_name == "npm-artifact-download-consumer"
+                else (),
             )
         )
 
@@ -430,6 +489,7 @@ def normalize_job_for_compare(job: dict[str, Any]) -> dict[str, Any]:
         "push_branch": str(job.get("push_branch") or "").strip(),
         "branch_allowlist": sorted(str(item).strip() for item in job.get("branch_allowlist") or [] if str(item).strip()),
         "tag_allowlist": sorted(str(item).strip() for item in job.get("tag_allowlist") or [] if str(item).strip()),
+        "artifact_triggers": normalize_artifact_triggers(job.get("artifact_triggers") or []),
         "pipeline_yaml": str(job.get("pipeline_yaml", "")).strip(),
         "pipeline_path": str(job.get("pipeline_path") or "").strip(),
         "enabled": bool(job.get("enabled", True)),
@@ -446,52 +506,100 @@ def normalize_payload_for_compare(payload: dict[str, Any]) -> dict[str, Any]:
         "push_branch": str(payload.get("push_branch", "")).strip(),
         "branch_allowlist": sorted(str(item).strip() for item in payload.get("branch_allowlist", []) if str(item).strip()),
         "tag_allowlist": sorted(str(item).strip() for item in payload.get("tag_allowlist", []) if str(item).strip()),
+        "artifact_triggers": normalize_artifact_triggers(payload.get("artifact_triggers", [])),
         "pipeline_yaml": str(payload.get("pipeline_yaml", "")).strip(),
         "pipeline_path": str(payload.get("pipeline_path", "")).strip(),
         "enabled": bool(payload.get("enabled", True)),
     }
 
 
-def sync_jobs(client: CoyoteClient, config: Config, specs: list[ScenarioSpec]) -> int:
-    jobs = client.list_jobs()
-    jobs_by_name = index_jobs_by_name(jobs, config.project_id)
+def normalize_artifact_triggers(raw_triggers: list[dict[str, Any]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for raw in raw_triggers:
+        producer_job_id = str(raw.get("producer_job_id", "")).strip()
+        path = str(raw.get("path", "")).strip()
+        if not producer_job_id or not path:
+            continue
+        normalized.append(
+            {
+                "producer_job_id": producer_job_id,
+                "path": path,
+            }
+        )
+    normalized.sort(key=lambda item: (item["producer_job_id"], item["path"]))
+    return normalized
 
+
+def sync_jobs(client: CoyoteClient, config: Config, specs: list[ScenarioSpec]) -> int:
     created = 0
     updated = 0
     skipped = 0
 
     print(f"Discovered {len(specs)} fixture scenarios.")
-    print(f"Loaded {len(jobs)} existing jobs from {config.api_base}.")
+    pending = list(specs)
+    first_pass = True
+    while pending:
+        jobs = client.list_jobs()
+        jobs_by_name = index_jobs_by_name(jobs, config.project_id)
+        if first_pass:
+            print(f"Loaded {len(jobs)} existing jobs from {config.api_base}.")
+            first_pass = False
 
-    for spec in specs:
-        existing_matches = jobs_by_name.get(spec.job_name, [])
-        if len(existing_matches) > 1:
-            raise ApiError(
-                f"project {config.project_id} has multiple jobs named {spec.job_name!r}; refusing to continue"
+        next_pending: list[ScenarioSpec] = []
+        processed_this_pass = 0
+
+        for spec in pending:
+            unresolved = spec.unresolved_artifact_triggers(jobs_by_name)
+            if unresolved:
+                next_pending.append(spec)
+                continue
+
+            existing_matches = jobs_by_name.get(spec.job_name, [])
+            if len(existing_matches) > 1:
+                raise ApiError(
+                    f"project {config.project_id} has multiple jobs named {spec.job_name!r}; refusing to continue"
+                )
+
+            if not existing_matches:
+                payload = spec.create_payload(config, jobs_by_name)
+                print(f"[create] {spec.job_name} -> {spec.pipeline_path}")
+                client.create_job(payload)
+                created += 1
+                processed_this_pass += 1
+                continue
+
+            existing = existing_matches[0]
+            update_payload = spec.update_payload(config, jobs_by_name)
+            current_state = normalize_job_for_compare(existing)
+            desired_state = normalize_payload_for_compare(update_payload)
+            if current_state == desired_state:
+                print(f"[skip]   {spec.job_name} is already up to date")
+                skipped += 1
+                processed_this_pass += 1
+                continue
+
+            job_id = str(existing.get("id", "")).strip()
+            if not job_id:
+                raise ApiError(f"existing job {spec.job_name!r} is missing an id")
+            print(f"[update] {spec.job_name} -> {spec.pipeline_path}")
+            client.update_job(job_id, update_payload)
+            updated += 1
+            processed_this_pass += 1
+
+        if not next_pending:
+            break
+        if processed_this_pass == 0:
+            missing = sorted(
+                {
+                    dependency
+                    for spec in next_pending
+                    for dependency in spec.unresolved_artifact_triggers(jobs_by_name)
+                }
             )
-
-        if not existing_matches:
-            payload = spec.create_payload(config)
-            print(f"[create] {spec.job_name} -> {spec.pipeline_path}")
-            client.create_job(payload)
-            created += 1
-            continue
-
-        existing = existing_matches[0]
-        update_payload = spec.update_payload(config)
-        current_state = normalize_job_for_compare(existing)
-        desired_state = normalize_payload_for_compare(update_payload)
-        if current_state == desired_state:
-            print(f"[skip]   {spec.job_name} is already up to date")
-            skipped += 1
-            continue
-
-        job_id = str(existing.get("id", "")).strip()
-        if not job_id:
-            raise ApiError(f"existing job {spec.job_name!r} is missing an id")
-        print(f"[update] {spec.job_name} -> {spec.pipeline_path}")
-        client.update_job(job_id, update_payload)
-        updated += 1
+            raise ApiError(
+                "unable to resolve fixture artifact trigger dependencies: " + ", ".join(missing)
+            )
+        pending = next_pending
 
     print(f"Summary: created={created} updated={updated} skipped={skipped}")
     return 0

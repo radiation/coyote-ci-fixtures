@@ -24,6 +24,7 @@ scenarios/
   monorepo-lite-submodules/
   maven-jar-basic/
   npm-library-package/
+  npm-artifact-download-consumer/
   python-uv-managed-image-base/
   python-uv-managed-image-lockfile-bump/
 ```
@@ -52,6 +53,7 @@ Current opt-in scenarios:
 - `docker-image-pull-smoke`: pull a public image and upload a simple artifact
 - `maven-dependency-smoke`: resolve a Maven Central dependency and package a tiny JAR
 - `npm-install-cache-smoke`: resolve an npm dependency, exercise the `node` cache preset, and pack a tarball
+- `npm-artifact-download-consumer`: downstream job that consumes the producer tarball via artifact trigger metadata
 - `python-pip-install-smoke`: resolve PyPI dependencies and upload a version report
 - `missing-tool-failure-smoke`: intentionally fail on an image that does not contain Maven so logs/status can be inspected
 
@@ -96,7 +98,7 @@ Queueing helpers:
 - `scripts/run-fixtures.sh all` queues only the small default scenarios.
 - `scripts/run-fixtures.sh real-network` queues the successful real-network smoke set.
 - `scripts/run-fixtures.sh manual-failure` queues the intentional failure fixture.
-- `scripts/run-fixtures.sh artifact-download-chain` queues a real npm package producer, waits for success, then queues an inline consumer build that downloads that artifact back from Coyote.
+- `scripts/run-fixtures.sh artifact-download-chain` queues the npm package producer, waits for success, then waits for the bootstrapped downstream consumer job that is triggered by artifact upload.
 
 CLI-first smoke loop after running `scripts/bootstrap_fixture_jobs.py`:
 
@@ -125,7 +127,13 @@ Recommended local prerequisites before running the real-network scenarios:
 - the host Docker daemon can pull public images
 - you are comfortable with the local-dev Docker socket trust model documented in the main repo
 
-For `artifact-download-chain`, the consumer step container also needs a Coyote API URL that is reachable from inside Docker. The helper defaults `STEP_API_URL` to `http://host.docker.internal:8080`; override it when your local server is reachable at a different address from step containers.
+For `artifact-download-chain`, the downstream consumer job needs a Coyote API URL that is reachable from inside Docker. The fixture's `coyote.yml` sets `COYOTE_API_URL` to `http://host.docker.internal:8080`; update that job if your local server is reachable at a different address from step containers.
+
+Before running `artifact-download-chain`, bootstrap the fixture jobs so the downstream consumer job and its `artifact_triggers` configuration exist:
+
+```bash
+python3 coyote-ci-fixtures/scripts/bootstrap_fixture_jobs.py npm-install-cache-smoke npm-artifact-download-consumer
+```
 
 For the cache smoke specifically, run the same job twice and inspect `coyote build logs <build-id>` for lines such as:
 
@@ -190,9 +198,10 @@ steps:
 
 ### `npm-artifact-download-consumer`
 
-- This is an orchestration-only consumer fixture used by `scripts/run-fixtures.sh artifact-download-chain`.
-- The helper first runs `npm-install-cache-smoke` to publish a real `.tgz`, then queues an inline pipeline that checks out this repo, downloads that artifact from Coyote, installs it with `npm`, and writes a small verification report.
-- The scenario folder intentionally does not include a standalone `coyote.yml` because the artifact URL is injected dynamically per producer build.
+- This is a standalone downstream scenario with a bootstrapped job-level `artifact_triggers` entry pointing at `npm-install-cache-smoke`.
+- The consumer script can still accept an explicit `COYOTE_ARTIFACT_URL`, but its default path is to derive the artifact download URL from the injected trigger environment:
+  `COYOTE_TRIGGER_BUILD_ID`, `COYOTE_TRIGGER_ARTIFACT_ID`, and related provenance fields.
+- It is intended to run as an artifact-triggered consumer. A direct manual run without trigger metadata will fail fast.
 
 ### `python-uv-managed-image-base` and `python-uv-managed-image-lockfile-bump`
 
